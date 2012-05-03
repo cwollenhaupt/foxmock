@@ -50,6 +50,14 @@ Define Class foxMock as Collection
 	* track of all members, call frequencies, etc.
 	*--------------------------------------------------------------------------------------
 	Members = Null
+	
+	*--------------------------------------------------------------------------------------
+	* Many classes require that developers create a subclass and overide methods with the
+	* actual implementation. To test those without creating a sub class for every test,
+	* we can use these classes as the basis for our mock up object.
+	*--------------------------------------------------------------------------------------
+	cFoundation = ""
+	oFoundation = NULL
 
 *========================================================================================
 * Internally we instantiate subclasses that need to refer back to the master obejct and
@@ -241,15 +249,44 @@ Procedure PrepareForTest (tcMember)
 	*--------------------------------------------------------------------------------------
 	Assert Vartype(m.tcMember) == "C"
 	Assert Lower(m.tcMember) == m.tcMember
-	Assert This.Members.GetKey(m.tcMember) > 0
+
+	*--------------------------------------------------------------------------------------
+	* Find member for current operation
+	*--------------------------------------------------------------------------------------
+	Local lnIndex
+	lnIndex = This.Members.GetKey(m.tcMember)
+	If Empty(This.cFoundation)
+		Assert m.lnIndex > 0
+	EndIf
 	
 	*--------------------------------------------------------------------------------------
 	* We ask the member definition to provide us with an implementation
 	*--------------------------------------------------------------------------------------
 	Local loImplementation
-	loImplementation = This.Members[m.tcMember].GetImplementation()
+	If m.lnIndex == 0
+		loImplementation = This.GetFoundationMaster ()
+	Else 
+		loImplementation = This.Members[m.lnIndex].GetImplementation()
+	EndIf
 
 Return m.loImplementation
+
+*========================================================================================
+* Returns a class that implements the basic interface for FoxMock as well as the 
+* foundation class. Technially it's a sub class of the foundation class and therefore
+* as the same runtime requirements. Because most classes aren't stateless, we keep a 
+* single copy around.
+*========================================================================================
+Procedure GetFoundationMaster 
+
+	Local loFoundationDefinition
+	If IsNull(This.oFoundation)
+		loFoundationDefinition = CreateObject("mockFoundationDefinition")
+		loFoundationDefinition.cName = This.cFoundation
+		This.oFoundation = loFoundationDefinition.GetImplementation (This)
+	EndIf 	
+
+Return This.oFoundation
 
 *========================================================================================
 * Adds a property or a method to the definition and makes it the current member. Any 
@@ -414,12 +451,12 @@ Define Class foxMock_New as foxMock
 	*--------------------------------------------------------------------------------------
 	* Just so that VFP can actually find the definition. We never us this.
 	*--------------------------------------------------------------------------------------
-	New = NULL
-
+	Dimension New[1]
+	
 *========================================================================================
 * Returns a new mockup object
 *========================================================================================
-Procedure New_Access
+Procedure New_Access (tcClass)
 
 	*--------------------------------------------------------------------------------------
 	* The following code operates on the object directly
@@ -438,6 +475,9 @@ Procedure New_Access
 	* definition. Everything else uses the mockup.
 	*--------------------------------------------------------------------------------------
 	loMaster.SetDefinitionLine (m.loMaster.GetCaller( 1))
+	If not Empty(m.tcClass)
+		loMaster.cFoundation = m.tcClass
+	EndIf
 	
 Return m.loMaster 
 
@@ -996,14 +1036,16 @@ EndDefine
 Define Class mockDefinition as Custom
 	
 	cName = ""
+	oMaster = NULL
 
 *========================================================================================
 * Returns an implementation of the property
 *========================================================================================
-Procedure GetImplementation
+Procedure GetImplementation (toMaster)
 
 	Local loImplementation, lcScript
 	lcScript = This.CreateClassDefinition()
+	This.oMaster = m.toMaster
 	Do (m.lcScript) with m.loImplementation, This
 
 Return m.loImplementation
@@ -1027,6 +1069,68 @@ Return m.lcFile
 *========================================================================================
 Procedure GetStubDefinition	(tcClass)
 Procedure Reset
+
+EndDefine 
+
+*========================================================================================
+* Implements a FoxMock compatible object based on the 
+*========================================================================================
+Define Class mockFoundationDefinition as mockDefinition 
+	
+*========================================================================================
+* Returns the class definition for the foundation class
+*========================================================================================
+Procedure GetStubDefinition	(tcClass)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcClass) == "C"
+		
+	*--------------------------------------------------------------------------------------
+	* Extract class and library name
+	*--------------------------------------------------------------------------------------
+	Local lcClass, lcLibrary
+	lcClass = StrExtract(This.cName, "", "|", 1, 2)
+	lcLibrary = StrExtract(This.cName, "|", "")
+	
+	*--------------------------------------------------------------------------------------
+	* The script returns the new instance by reference, because we call it using the
+	* DO command.
+	*--------------------------------------------------------------------------------------
+	Local lcScript
+	Text to m.lcScript noshow TextMerge
+		Lparameters roRef, toDefinition
+		roRef = CreateObject ("<<m.tcClass>>")
+		roRef.__oDefinition = m.toDefinition
+		Define Class <<m.tcClass>> as <<m.lcClass>> <<Iif(Empty(m.lcLibrary),"","OF")>> <<m.lcLibrary>>
+		__oDefinition = NULL
+		Procedure This_Access (tcMember)
+			If Vartype(foxMock__Accessor) == "L"
+				Return This
+			Else
+				Private foxMock__Accessor
+				foxMock__Accessor = .T.
+			EndIf
+			Local lcMember, loMaster
+			lcMember = Lower(m.tcMember)
+			loMaster = This.__oDefinition.oMaster
+			If loMaster.Members.GetKey(m.lcMember) == 0
+				If PemStatus(This.ParentClass, "This_Access", 5)
+					Return DoDefault(m.tcMember)
+				Else 
+					Return This
+				EndIf
+			Else
+				Local loImplementation
+				loImplementation = loMaster.PrepareForTest (m.lcMember)
+				loMaster.oKeepAlive = m.loImplementation
+				Return m.loImplementation
+			EndIf
+		EndDefine 
+	EndText
+	
+Return m.lcScript
 
 EndDefine 
 
