@@ -132,10 +132,40 @@ Procedure Test_Mock_FoundationClass
 		.CallTo("GetValue").Returns("'result'")
 	This.AssertEquals("fail", "RESULT", loObj.ToUpper())
 
+*========================================================================================
+Procedure Test_ExpectCallToWhen
+	Local loDialogs
+	loDialogs = mock.new.expect.CallTo("Alert").When("'X'")
+	loDialogs.Alert("X")
+	mock.VerifyAllExpectations()
+	
+*========================================================================================
+Procedure Test_ExpectCallToFirst
+	Local loDialogs
+	loDialogs = mock.new ;
+		.expect.CallTo("Alert").When("'X'") ;
+		.CallTo("Alert").When("'Y'")
+	loDialogs.Alert("Y")
+	Try
+		mock.VerifyAllExpectations()
+		This.asserttrue("verify should not pass",.F.)
+	Catch to loEx
+		This.AssertEquals("fail", "Expectation failed for alert", loEx.Message)
+	EndTry 
+
+*========================================================================================
+Procedure Test_ExpectCallToSecond
+	Local loDialogs
+	loDialogs = mock.new ;
+		.CallTo("Alert").When("'X'") ;
+		.expect.CallTo("Alert").When("'Y'")
+	loDialogs.Alert("Y")
+	mock.VerifyAllExpectations()
+
 EndDefine
 
 *========================================================================================
-* This class is
+* This class is used in the Mock_FoundationClass test.
 *========================================================================================
 Define Class FoundationTestClass as Custom
 Procedure ToUpper

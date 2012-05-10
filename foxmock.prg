@@ -301,7 +301,7 @@ Procedure RegisterMember (toMember)
 	Else
 		This.Members[m.lcName].Reset()
 	EndIf
-	This.ExpectationHandledBy (m.toMember)
+	This.ExpectationHandledBy (This.Members[m.lcName])
 	This.cActiveMember = m.lcName
 
 EndProc
@@ -414,6 +414,9 @@ Procedure ExpectationHandledBy (toHandler)
 	If Vartype(This.oExpectation) == "O"
 		This.oExpectation.HandledBy = m.toHandler
 		This.oExpectation = NULL
+		toHandler.lExpectation = .T.
+	Else
+		toHandler.lExpectation = .F.
 	EndIf 
 	
 EndProc
@@ -949,6 +952,7 @@ Define Class mockMethodCall as Custom
 	cAction = "return"
 	cCondition = ""
 	Dimension aCondition[23]
+	lExpectation = .F.
 	
 *========================================================================================
 * Upon creating a method call, we can pass a condition. Only when the actual call 
@@ -990,8 +994,13 @@ EndProc
 *========================================================================================
 * Verifies that the actual outcome of a method call matches the expectation
 *========================================================================================
-Procedure VerifyExpectationVerifyExpectation
-Return This.lHasBeenCalled
+Procedure VerifyExpectation
+	If This.lExpectation
+		Return This.lHasBeenCalled
+	Else
+		Return .T.
+	EndIf
+EndProc
 
 *========================================================================================
 * Tests if the current condition meets the parameters being passed. We use this to filter
@@ -1037,6 +1046,7 @@ Define Class mockDefinition as Custom
 	
 	cName = ""
 	oMaster = NULL
+	lExpectation = .F.
 
 *========================================================================================
 * Returns an implementation of the property
@@ -1207,6 +1217,7 @@ Procedure AddCall (toCall)
 	* Add the call
 	*--------------------------------------------------------------------------------------
 	This.Calls.Add (m.toCall)
+	toCall.lExpectation = This.lExpectation
 	This.nCurrentCall = This.Calls.Count	
 
 EndProc
@@ -1277,17 +1288,23 @@ Procedure GetStubDefinition	(tcClass)
 Return m.lcScript
 
 *========================================================================================
-* 
+* verifies that all calls with expecations have actually been called. The default call
+* is a special case here as it is added before the expectation is registered. Therefore
+* we check the handlers expectation flag if there's only one registered call
 *========================================================================================
-Procedure VerifyExpectation
+Procedure VerifyExpectation 
 
-	Local loCall, llCalled
-	llCalled = .T.
+	If This.Calls.Count == 1 and This.lExpectation
+		This.Calls[1].lExpectation = This.lExpectation
+	EndIf
+	
+	Local loCall, llPassed
+	llPassed = .T.
 	For each loCall in This.Calls foxobject
-		llCalled = llCalled and loCall.lHasBeenCalled
+		llPassed = m.llPassed and m.loCall.VerifyExpectation ()
 	EndFor 
 
-Return m.llCalled
+Return m.llPassed
 
 *========================================================================================
 * Sets the return value in the current method call outcome.
