@@ -162,6 +162,13 @@ Procedure Test_ExpectCallToSecond
 	loDialogs.Alert("Y")
 	mock.VerifyAllExpectations()
 
+*========================================================================================
+Procedure Test_TextMerge
+	Local loData, lcText
+	loData = mock.new.Property("Data").Is("'OK'")
+	lcText = Textmerge("Result: <<loData.Data>>")
+	This.AssertEquals ("fail", "Result: OK", m.lcText)
+
 EndDefine
 
 *========================================================================================

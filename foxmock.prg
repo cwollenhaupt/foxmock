@@ -1106,39 +1106,40 @@ Procedure GetStubDefinition	(tcClass)
 	
 	*--------------------------------------------------------------------------------------
 	* The script returns the new instance by reference, because we call it using the
-	* DO command.
+	* DO command. We cannot use TEXTMERGE here, as the code might be triggered when we
+	* access a mocked object from within a textmerge statement. VFP triggers in this case
+	* an "Textmerge is recursive" error.
 	*--------------------------------------------------------------------------------------
 	Local lcScript
-	Text to m.lcScript noshow TextMerge
-		Lparameters roRef, toDefinition
-		roRef = CreateObject ("<<m.tcClass>>")
-		roRef.__oDefinition = m.toDefinition
-		Define Class <<m.tcClass>> as <<m.lcClass>> <<Iif(Empty(m.lcLibrary),"","OF")>> <<m.lcLibrary>>
-		__oDefinition = NULL
-		Procedure This_Access (tcMember)
-			If Vartype(foxMock__Accessor) == "L"
-				Return This
-			Else
-				Private foxMock__Accessor
-				foxMock__Accessor = .T.
-			EndIf
-			Local lcMember, loMaster
-			lcMember = Lower(m.tcMember)
-			loMaster = This.__oDefinition.oMaster
-			If loMaster.Members.GetKey(m.lcMember) == 0
-				If PemStatus(This.ParentClass, "This_Access", 5)
-					Return DoDefault(m.tcMember)
-				Else 
-					Return This
-				EndIf
-			Else
-				Local loImplementation
-				loImplementation = loMaster.PrepareForTest (m.lcMember)
-				loMaster.oKeepAlive = m.loImplementation
-				Return m.loImplementation
-			EndIf
-		EndDefine 
-	EndText
+	lcScript = "" ;
+		+'Lparameters roRef, toDefinition' + Chr(13)+Chr(10) ;
+		+'roRef = CreateObject ("'+m.tcClass+'")' + Chr(13)+Chr(10) ;
+		+'roRef.__oDefinition = m.toDefinition' + Chr(13)+Chr(10) ;
+		+'Define Class '+m.tcClass+' as '+m.lcClass+' '+Iif(Empty(m.lcLibrary),"","OF")+' '+m.lcLibrary + Chr(13)+Chr(10) ;
+		+'__oDefinition = NULL' + Chr(13)+Chr(10) ;
+		+'Procedure This_Access (tcMember)' + Chr(13)+Chr(10) ;
+		+'	If Vartype(foxMock__Accessor) == "L"' + Chr(13)+Chr(10) ;
+		+'		Return This' + Chr(13)+Chr(10) ;
+		+'	Else' + Chr(13)+Chr(10) ;
+		+'		Private foxMock__Accessor' + Chr(13)+Chr(10) ;
+		+'		foxMock__Accessor = .T.' + Chr(13)+Chr(10) ;
+		+'	EndIf' + Chr(13)+Chr(10) ;
+		+'	Local lcMember, loMaster' + Chr(13)+Chr(10) ;
+		+'	lcMember = Lower(m.tcMember)' + Chr(13)+Chr(10) ;
+		+'	loMaster = This.__oDefinition.oMaster' + Chr(13)+Chr(10) ;
+		+'	If loMaster.Members.GetKey(m.lcMember) == 0' + Chr(13)+Chr(10) ;
+		+'		If PemStatus(This.ParentClass, "This_Access", 5)' + Chr(13)+Chr(10) ;
+		+'			Return DoDefault(m.tcMember)' + Chr(13)+Chr(10) ;
+		+'		Else ' + Chr(13)+Chr(10) ;
+		+'			Return This' + Chr(13)+Chr(10) ;
+		+'		EndIf' + Chr(13)+Chr(10) ;
+		+'	Else' + Chr(13)+Chr(10) ;
+		+'		Local loImplementation' + Chr(13)+Chr(10) ;
+		+'		loImplementation = loMaster.PrepareForTest (m.lcMember)' + Chr(13)+Chr(10) ;
+		+'		loMaster.oKeepAlive = m.loImplementation' + Chr(13)+Chr(10) ;
+		+'		Return m.loImplementation' + Chr(13)+Chr(10) ;
+		+'	EndIf' + Chr(13)+Chr(10) ;
+		+'EndDefine ' + Chr(13)+Chr(10)
 	
 Return m.lcScript
 
@@ -1166,23 +1167,22 @@ Procedure GetStubDefinition	(tcClass)
 	* DO command.
 	*--------------------------------------------------------------------------------------
 	Local lcScript
-	Text to m.lcScript noshow TextMerge
-		Lparameters roRef, toDefinition
-		roRef = CreateObject ("<<m.tcClass>>", m.toDefinition)
-		Define Class <<m.tcClass>> as Custom
-			<<This.cName>> = .F.
-			oDefinition = Null
-		Procedure Init (toDefinition)
-			This.oDefinition = m.toDefinition 
-		EndProc 
-		Procedure <<This.cName>>_Access
-		Return This.oDefinition.uValue
-		Procedure <<This.cName>>_Assign (tuValue)
-			This.oDefinition.uValue = m.tuValue
-		EndProc 
-		EndDefine 
-	EndText
-	
+	lcScript = "" ;
+		+'Lparameters roRef, toDefinition' + Chr(13)+Chr(10) ;
+		+'roRef = CreateObject ("'+m.tcClass+'", m.toDefinition)' + Chr(13)+Chr(10) ;
+		+'Define Class '+m.tcClass+' as Custom' + Chr(13)+Chr(10) ;
+		+'	'+This.cName+' = .F.' + Chr(13)+Chr(10) ;
+		+'	oDefinition = Null' + Chr(13)+Chr(10) ;
+		+'Procedure Init (toDefinition)' + Chr(13)+Chr(10) ;
+		+'	This.oDefinition = m.toDefinition ' + Chr(13)+Chr(10) ;
+		+'EndProc ' + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+'_Access' + Chr(13)+Chr(10) ;
+		+'Return This.oDefinition.uValue' + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+'_Assign (tuValue)' + Chr(13)+Chr(10) ;
+		+'	This.oDefinition.uValue = m.tuValue' + Chr(13)+Chr(10) ;
+		+'EndProc ' + Chr(13)+Chr(10) ;
+		+'EndDefine '
+
 Return m.lcScript
 
 EndDefine 
@@ -1249,41 +1249,39 @@ Procedure GetStubDefinition	(tcClass)
 	* DO command.
 	*--------------------------------------------------------------------------------------
 	Local lcScript
-	Text to m.lcScript noshow TextMerge
-		Lparameters roRef, tuValue
-		roRef = CreateObject ("<<m.tcClass>>", m.tuValue)
-		Define Class <<m.tcClass>> as Custom
-			oDefinition = Null
-		Procedure Init (toDefinition)
-			This.oDefinition = m.toDefinition
-		EndProc 
-		Procedure <<This.cName>> (<<m.lcParams>>)
-			Local lnCall, loCall
-			For lnCall = This.oDefinition.Calls.Count to 1 Step -1
-				loCall = This.oDefinition.Calls[m.lnCall]
-				If loCall.Applies(<<m.lcParams>>)
-					Exit
-				EndIf 
-			EndFor 
-			loCall.lHasBeenCalled = .T.
-			Do case
-			Case m.loCall.cAction == "return"
-				Return loCall.uReturnValue
-			Case m.loCall.cAction == "fail"
-				Local lcValues, lnParm
-				lcValues = ""
-				For lnParm = 1 to Pcount()
-					lcValues = m.lcValues + " " + Transform(Evaluate("T"+Transform(m.lnParm)))
-				EndFor
-				If Empty(m.lcValues)
-					Error 2005, "call to <<This.cName>> failed"
-				Else
-					Error 2005, "call to <<This.cName>> failed with" + m.lcValues
-				EndIf
-			EndCase
-		EndDefine
-		EndDefine 
-	EndText
+	lcScript = "" ;
+		+'Lparameters roRef, tuValue' + Chr(13)+Chr(10) ;
+		+'roRef = CreateObject ("'+m.tcClass+'", m.tuValue)' + Chr(13)+Chr(10) ;
+		+'Define Class '+m.tcClass+' as Custom' + Chr(13)+Chr(10) ;
+		+'	oDefinition = Null' + Chr(13)+Chr(10) ;
+		+'Procedure Init (toDefinition)' + Chr(13)+Chr(10) ;
+		+'	This.oDefinition = m.toDefinition' + Chr(13)+Chr(10) ;
+		+'EndProc ' + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+' ('+m.lcParams+')' + Chr(13)+Chr(10) ;
+		+'	Local lnCall, loCall' + Chr(13)+Chr(10) ;
+		+'	For lnCall = This.oDefinition.Calls.Count to 1 Step -1' + Chr(13)+Chr(10) ;
+		+'		loCall = This.oDefinition.Calls[m.lnCall]' + Chr(13)+Chr(10) ;
+		+'		If loCall.Applies('+m.lcParams+')' + Chr(13)+Chr(10) ;
+		+'			Exit' + Chr(13)+Chr(10) ;
+		+'		EndIf ' + Chr(13)+Chr(10) ;
+		+'	EndFor ' + Chr(13)+Chr(10) ;
+		+'	loCall.lHasBeenCalled = .T.' + Chr(13)+Chr(10) ;
+		+'	Do case' + Chr(13)+Chr(10) ;
+		+'	Case m.loCall.cAction == "return"' + Chr(13)+Chr(10) ;
+		+'		Return loCall.uReturnValue' + Chr(13)+Chr(10) ;
+		+'	Case m.loCall.cAction == "fail"' + Chr(13)+Chr(10) ;
+		+'		Local lcValues, lnParm' + Chr(13)+Chr(10) ;
+		+'		lcValues = ""' + Chr(13)+Chr(10) ;
+		+'		For lnParm = 1 to Pcount()' + Chr(13)+Chr(10) ;
+		+'			lcValues = m.lcValues + " " + Transform(Evaluate("T"+Transform(m.lnParm)))' + Chr(13)+Chr(10) ;
+		+'		EndFor' + Chr(13)+Chr(10) ;
+		+'		If Empty(m.lcValues)' + Chr(13)+Chr(10) ;
+		+'			Error 2005, "call to '+This.cName+' failed"' + Chr(13)+Chr(10) ;
+		+'		Else' + Chr(13)+Chr(10) ;
+		+'			Error 2005, "call to '+This.cName+' failed with" + m.lcValues' + Chr(13)+Chr(10) ;
+		+'		EndIf' + Chr(13)+Chr(10) ;
+		+'	EndCase' + Chr(13)+Chr(10) ;
+		+'EndDefine ' + Chr(13)+Chr(10)
 	
 Return m.lcScript
 
