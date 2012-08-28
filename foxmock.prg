@@ -256,7 +256,7 @@ Procedure PrepareForTest (tcMember)
 	Local lnIndex
 	lnIndex = This.Members.GetKey(m.tcMember)
 	If Empty(This.cFoundation)
-		Assert m.lnIndex > 0
+		Assert m.lnIndex > 0 Message "Undefined mocked member '"+m.tcMember+"'"
 	EndIf
 	
 	*--------------------------------------------------------------------------------------
