@@ -1,45 +1,34 @@
 *========================================================================================
-* FoxUnit Template für Acodey
+* FoxMock unit tests
 *========================================================================================
 Define Class Test_foxMock as FxuTestCase OF FxuTestCase.prg
 
-	*--------------------------------------------------------------------------------------
-	* IntelliSense aktivieren
-	*--------------------------------------------------------------------------------------
 	#IF .F.
 		LOCAL THIS AS Test_foxMock OF Test_foxMock.PRG
 	#ENDIF
 	
 *========================================================================================
-* Test hochfahren.
-*========================================================================================
 Procedure Setup
 	Public mock
 	mock = NewObject("foxMock", "tools\foxMock.prg")
-EndProc
 
-*========================================================================================
-* Test herunterfahren
 *========================================================================================
 Procedure TearDown
 	Release mock
-EndProc
 
 *========================================================================================
 Procedure Test_Mock_Basic_Property
 	Local loObj
 	loObj = mock.New ;
 		.Property("lDebugMode").Is(".T.")
-	This.AssertTrue("fail", loObj.lDebugMode)
-EndProc
+	This.AssertTrue (loObj.lDebugMode)
 
 *========================================================================================
 Procedure Test_Mock_Basic_Method
 	Local loObj
 	loObj = mock.New ;
 		.CallTo("IsAdmin").Return(".F.")
-	This.AssertTrue("fail", not loObj.IsAdmin ("user"))
-EndProc
+	This.AssertFalse (loObj.IsAdmin ("user"))
 
 *========================================================================================
 Procedure Test_Mock_ReturnObject
@@ -51,8 +40,7 @@ Procedure Test_Mock_ReturnObject
 				.AsObject ;
 		)
 	loTest = loObj.Test ()
-	This.AssertEquals ("fail", "xx", loTest.cTest)
-EndProc
+	This.AssertEquals ("xx", loTest.cTest)
 
 *========================================================================================
 Procedure Test_Mock_AsObject_Named
@@ -60,8 +48,7 @@ Procedure Test_Mock_AsObject_Named
 	loObj = mock.New ;
 		.Property("cTest").Is("'xx'") ;
 		.AsObject("test")
-	This.AssertEquals ("fail", "xx", mock["test"].cTest)
-EndProc
+	This.AssertEquals ("xx", mock["test"].cTest)
 
 *========================================================================================
 Procedure Test_Mock_ChangeProperty
@@ -69,8 +56,7 @@ Procedure Test_Mock_ChangeProperty
 	loObj = mock.New ;
 		.Property("cTest").Is("'xx'")
 	loObj.cTest = "yy"
-	This.AssertEquals ("fail", "yy", loObj.cTest)
-endproc
+	This.AssertEquals ("yy", loObj.cTest)
 
 *========================================================================================
 Procedure Test_Mock_ExpectCalled
@@ -79,7 +65,6 @@ Procedure Test_Mock_ExpectCalled
 		.Expect.CallTo("Test")
 	loObj.Test()
 	mock.VerifyAllExpectations()
-EndProc	
 		
 *========================================================================================
 Procedure Test_Mock_ExpectNotCalled
@@ -88,11 +73,10 @@ Procedure Test_Mock_ExpectNotCalled
 		.Expect.CallTo("Test")
 	Try
 		mock.VerifyAllExpectations()
-		This.asserttrue("verify should not pass",.F.)
+		This.AssertTrue(.F., "VerifyAllExpectations should not pass")
 	Catch to loEx
-		This.AssertEquals("fail", "Expectation failed for test", loEx.Message)
+		This.AssertEquals("Expectation failed for test", loEx.Message)
 	EndTry 
-EndProc	
 		
 *========================================================================================
 Procedure Test_Mock_NestedObjects
@@ -130,7 +114,7 @@ Procedure Test_Mock_FoundationClass
 	Local loObj
 	loObj = mock.New("FoundationTestClass") ;
 		.CallTo("GetValue").Returns("'result'")
-	This.AssertEquals("fail", "RESULT", loObj.ToUpper())
+	This.AssertEquals("RESULT", loObj.ToUpper())
 
 *========================================================================================
 Procedure Test_ExpectCallToWhen
@@ -148,9 +132,9 @@ Procedure Test_ExpectCallToFirst
 	loDialogs.Alert("Y")
 	Try
 		mock.VerifyAllExpectations()
-		This.asserttrue("verify should not pass",.F.)
+		This.AssertTrue(.F., "VerifyAllExpectations should not pass")
 	Catch to loEx
-		This.AssertEquals("fail", "Expectation failed for alert", loEx.Message)
+		This.AssertEquals("Expectation failed for alert", loEx.Message)
 	EndTry 
 
 *========================================================================================
@@ -167,7 +151,7 @@ Procedure Test_TextMerge
 	Local loData, lcText
 	loData = mock.new.Property("Data").Is("'OK'")
 	lcText = Textmerge("Result: <<loData.Data>>")
-	This.AssertEquals ("fail", "Result: OK", m.lcText)
+	This.AssertEquals ("Result: OK", m.lcText)
 
 EndDefine
 
