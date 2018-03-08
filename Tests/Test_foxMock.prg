@@ -152,6 +152,17 @@ Procedure Test_TextMerge
 	loData = mock.new.Property("Data").Is("'OK'")
 	lcText = Textmerge("Result: <<loData.Data>>")
 	This.AssertEquals ("Result: OK", m.lcText)
+	
+*========================================================================================
+Procedure Test_Scatter
+	Create Cursor TestData (cField C(12), Data V(10))
+	Insert into TestData Values ("test passed", "not OK")
+	Local loData, lcText
+	loData = mock.new;
+		.Property("Data").Is("'OK'") ;
+		.Scatter("'TestData', 'RECORD 1'")
+	This.AssertEquals ("test passed ", loData.cField)
+	This.AssertEquals ("OK", loData.Data)
 
 EndDefine
 

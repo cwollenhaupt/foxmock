@@ -58,7 +58,7 @@ Define Class foxMock as Collection
 	*--------------------------------------------------------------------------------------
 	cFoundation = ""
 	oFoundation = NULL
-
+	
 *========================================================================================
 * Internally we instantiate subclasses that need to refer back to the master obejct and
 * the repository object.
@@ -201,6 +201,8 @@ Procedure PrepareForCommand (tcMember)
 		loImplementation = CreateObject ("foxMock_When", This.GetMaster ())
 	Case m.tcMember == "fail"
 		loImplementation = CreateObject ("foxMock_Fail", This.GetMaster ())
+	Case m.tcMember == "scatter"
+		loImplementation = CreateObject ("foxMock_Scatter", This.GetMaster ())
 	Otherwise 
 		Assert .F. Message "Unknown operation " + m.tcMember
 		loImplementation = NULL
@@ -251,7 +253,7 @@ Procedure PrepareForTest (tcMember)
 	Assert Lower(m.tcMember) == m.tcMember
 
 	*--------------------------------------------------------------------------------------
-	* Find member for current operation
+	* Find member for current operation among the registered members.
 	*--------------------------------------------------------------------------------------
 	Local lnIndex
 	lnIndex = This.Members.GetKey(m.tcMember)
@@ -324,6 +326,12 @@ Return This.ActiveMemberIs ("mockPropertyDefinition")
 *========================================================================================
 Procedure MethodIsActive
 Return This.ActiveMemberIs ("mockMethodDefinition")
+
+*========================================================================================
+* Returns .T. when the currently active member is a scatter operation
+*========================================================================================
+Procedure ScatterIsActive
+Return This.ActiveMemberIs ("mockScatterDefinition")
 
 *========================================================================================
 * Returns .T. when the currently active member is the passed type
@@ -534,6 +542,123 @@ Procedure Property_Access (tcProperty)
 	loMaster.RegisterMember (m.loProperty)
 	
 Return m.loMaster
+
+EndDefine 
+
+*========================================================================================
+* Add properties from a record using SCATTER
+*========================================================================================
+Define Class foxMock_Scatter as foxMock
+
+	*--------------------------------------------------------------------------------------
+	* Just so that VFP can actually find the definition. We never us this.
+	*--------------------------------------------------------------------------------------
+	Dimension Scatter[1]
+	
+*========================================================================================
+* Registers a set of new properties for the mockup 
+*========================================================================================
+Procedure Scatter_Access (tcDefinition)
+	
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcDefinition) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+	
+	*--------------------------------------------------------------------------------------
+	* Returns the specified record
+	*--------------------------------------------------------------------------------------
+	Local loRecord, loMaster
+	loMaster = This.GetMaster()
+	loRecord = This.GetRecord (&tcDefinition)
+
+	*--------------------------------------------------------------------------------------
+	* Register each member as a property with a value
+	*--------------------------------------------------------------------------------------
+	Local laMembers[1], lnMember, lcName
+	If Vartype(m.loRecord) == "O"
+		For lnMember = 1 to AMembers(laMembers, m.loRecord)
+			lcName = Lower (laMembers[m.lnMember])
+			This.AddMember (m.loMaster, m.lcName, GetPem (m.loRecord, m.lcName))
+		EndFor
+	EndIf 
+
+Return m.loMaster
+
+*========================================================================================
+* Reads the specified record
+*========================================================================================
+Procedure GetRecord (tcAlias, tcLocate)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcAlias) == "C"
+	Assert Vartype(m.tcLocate) $ "CL"
+	
+	*--------------------------------------------------------------------------------------
+	* Save environment
+	*--------------------------------------------------------------------------------------
+	Local lnSelect, lnRecNo
+	lnSelect = Select()
+	If Used(m.tcAlias)
+		Select (m.tcAlias)
+		lnRecNo = Recno()
+	Else
+		Return null
+	EndIf
+	
+	*--------------------------------------------------------------------------------------
+	* Load the desired record
+	*--------------------------------------------------------------------------------------
+	Local loRecord
+	If not Empty (m.tcLocate)
+		Locate &tcLocate
+	EndIf
+	Scatter name loRecord Memo
+	
+	*--------------------------------------------------------------------------------------
+	* Restore environment
+	*--------------------------------------------------------------------------------------
+	If not Empty (m.lnRecNo)
+		Locate RECORD m.lnRecNo
+	EndIf
+	Select (m.lnSelect)
+
+Return m.loRecord
+
+*========================================================================================
+* Adds a property member
+*========================================================================================
+Procedure AddMember (toMaster, tcName, tuValue)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.toMaster) == "O"
+	Assert Vartype(m.tcName) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* The property object keeps track of a few pieces we need to know about every simulated
+	* property.
+	*--------------------------------------------------------------------------------------
+	Local loProperty
+	loProperty = CreateObject("mockPropertyDefinition")
+	loProperty.cName = m.tcName
+	loProperty.uValue = m.tuValue
+
+	*--------------------------------------------------------------------------------------
+	* Register the new property in the master object
+	*--------------------------------------------------------------------------------------
+	toMaster.RegisterMember (m.loProperty)
+
+EndProc
 
 EndDefine 
 
