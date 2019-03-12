@@ -164,6 +164,15 @@ Procedure Test_Scatter
 	This.AssertEquals ("test passed ", loData.cField)
 	This.AssertEquals ("OK", loData.Data)
 
+*========================================================================================
+Procedure Test_Mock_IsObject
+	Local loRef
+	loRef = mock.new ;
+		.Property ("oChild").IsObject ( ;
+			mock.new.Property ("nValue").Is ("1").AsObject ;
+		)
+	This.AssertEquals (1, loRef.oChild.nValue)
+			
 EndDefine
 
 *========================================================================================

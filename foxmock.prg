@@ -187,6 +187,8 @@ Procedure PrepareForCommand (tcMember)
 		loImplementation = CreateObject ("foxMock_Property", This.GetMaster ())
 	Case m.tcMember == "is"
 		loImplementation = CreateObject ("foxMock_Is", This.GetMaster ())
+	Case m.tcMember == "isobject"
+		loImplementation = CreateObject ("foxMock_IsObject", This.GetMaster ())
 	Case m.tcMember == "expect"
 		loImplementation = CreateObject ("foxMock_Expect", This.GetMaster ())
 	Case m.tcMember == "callto" or m.tcMember == "method"
@@ -699,6 +701,52 @@ Procedure Is_Access (tcValue)
 		loProperty.uValue = Evaluate(m.tcValue)
 	Else
 		Assert .F. Message "operation 'Is' only valid for properties"
+	EndIf
+		
+Return m.loMaster
+
+EndDefine 
+
+*========================================================================================
+* The IsObject operation sets the object value for the current property
+*========================================================================================
+Define Class foxMock_IsObject as foxMock
+
+	*--------------------------------------------------------------------------------------
+	* Just so that VFP can actually find the definition. We never use this.
+	*--------------------------------------------------------------------------------------
+	Dimension IsObject[1]
+	
+*========================================================================================
+* Stores the value for the active property. We store the object key rather then the
+* actual object.
+*========================================================================================
+Procedure IsObject_Access (tcId)
+	
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcId) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+
+	*--------------------------------------------------------------------------------------
+	* Store the value
+	*--------------------------------------------------------------------------------------
+	Local loMaster, loProperty, loObj, loRepository
+	loMaster = This.GetMaster()
+	If loMaster.PropertyIsActive()
+		loProperty = loMaster.GetActiveMember()
+		loRepository = This.GetRepository()
+		loObj = loRepository.Item(m.tcId)
+		Assert Vartype(m.loObj) == "O"
+		loProperty.uValue = m.loObj
+	Else
+		Assert .F. Message "operation 'IsObject' only valid for properties"
 	EndIf
 		
 Return m.loMaster
