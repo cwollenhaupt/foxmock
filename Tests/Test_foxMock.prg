@@ -172,7 +172,45 @@ Procedure Test_Mock_IsObject
 			mock.new.Property ("nValue").Is ("1").AsObject ;
 		)
 	This.AssertEquals (1, loRef.oChild.nValue)
-			
+
+*========================================================================================
+Procedure Test_ThenReturn
+	Local loRef
+	loRef = mock.new ;
+		.Method("Test").Return("1").Then.Return("2")
+	This.AssertEquals (1, loRef.Test ())
+	This.AssertEquals (2, loRef.Test ())
+	This.AssertEquals (.T., loRef.Test ())
+
+*========================================================================================
+Procedure Test_WhenThenReturn
+	Local loRef
+	loRef = mock.new ;
+		.Method("Test");
+			.Return("3") ;
+			.When(".T.").Return("1").Then.Return("2")
+	This.AssertEquals (1, loRef.Test (.T.))
+	This.AssertEquals (3, loRef.Test ())
+	This.AssertEquals (2, loRef.Test (.T.))
+	
+*========================================================================================
+Procedure Test_ThenReturnReturn
+	Local loRef
+	loRef = mock.new ;
+		.Method("Test").Return("1").Then.Return("2").Return("3")
+	This.AssertEquals (1, loRef.Test ())
+	This.AssertEquals (2, loRef.Test ())
+	This.AssertEquals (3, loRef.Test ())
+
+*========================================================================================
+Procedure Test_IgnoreMultipleThen
+	Local loRef
+	loRef = mock.new ;
+		.Method("Test").Return("1").Then.Return("2").Then.Return("3")
+	This.AssertEquals (1, loRef.Test ())
+	This.AssertEquals (2, loRef.Test ())
+	This.AssertEquals (3, loRef.Test ())
+
 EndDefine
 
 *========================================================================================

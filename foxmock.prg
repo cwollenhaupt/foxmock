@@ -201,6 +201,8 @@ Procedure PrepareForCommand (tcMember)
 		loImplementation = CreateObject ("foxMock_ReturnObject", This.GetMaster ())
 	Case m.tcMember == "when"
 		loImplementation = CreateObject ("foxMock_When", This.GetMaster ())
+	Case m.tcMember == "then"
+		loImplementation = CreateObject ("foxMock_then", This.GetMaster ())
 	Case m.tcMember == "fail"
 		loImplementation = CreateObject ("foxMock_Fail", This.GetMaster ())
 	Case m.tcMember == "scatter"
@@ -1077,6 +1079,43 @@ Return m.loMaster
 EndDefine 
 
 *========================================================================================
+* The then operation specifies a sequence of return values.
+*========================================================================================
+Define Class foxMock_Then as foxMock
+
+	*--------------------------------------------------------------------------------------
+	* Just so that VFP can find the definition. We never us this.
+	*--------------------------------------------------------------------------------------
+	Dimension Then[1]
+	
+*========================================================================================
+* Then enables the return value queue. 
+*========================================================================================
+Procedure Then_Access
+	
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+
+	*--------------------------------------------------------------------------------------
+	* enable the return value queue
+	*--------------------------------------------------------------------------------------
+	Local loMaster, loMethod, loCall
+	loMaster = This.GetMaster()
+	If loMaster.MethodIsActive()
+		loMethod = loMaster.GetActiveMember()
+		loMethod.EnableReturnValueQueue ()
+	Else
+		Assert .F. Message "operation 'then' only valid for methods"
+	EndIf
+		
+Return m.loMaster
+
+EndDefine 
+
+*========================================================================================
 * The Fail operation lets a method call break the test. You either use it when you want
 * to make sure that nobody ever calls this method at all, or as the default action when
 * you setup several When actions.
@@ -1126,6 +1165,7 @@ Define Class mockMethodCall as Custom
 	cCondition = ""
 	Dimension aCondition[23]
 	lExpectation = .F.
+	oQueue = null
 	
 *========================================================================================
 * Upon creating a method call, we can pass a condition. Only when the actual call 
@@ -1209,6 +1249,47 @@ Procedure Applies( ;
 	EndFor 
 
 Return .T.
+
+*========================================================================================
+* Enables the return value queue. It's safe to call this method repeatedly.
+*========================================================================================
+Procedure EnableReturnValueQueue
+
+	If Vartype (This.oQueue) != "O"
+		This.oQueue = CreateObject ("Collection")
+		This.oQueue.Add (This.uReturnValue)
+		This.uReturnValue = .T.
+	EndIf
+	
+EndProc
+
+*========================================================================================
+* Sets the return value. 
+*========================================================================================
+Procedure SetReturnValue (tuValue)
+
+	If Vartype (This.oQueue) == "O"
+		This.oQueue.Add (m.tuValue)
+	Else
+		This.uReturnValue = m.tuValue
+	EndIf	
+
+EndProc
+
+*========================================================================================
+* Returns the next value from either the queue or the storedd return value.
+*========================================================================================
+Procedure GetReturnValue ()
+
+	Local luReturnValue
+	If Vartype (This.oQueue) == "O" and This.oQueue.Count > 0
+		luReturnValue = This.oQueue.Item (1)
+		This.oQueue.Remove (1)
+	Else
+		luReturnValue = This.uReturnValue
+	EndIf
+	
+Return m.luReturnValue
 
 EndDefine
 
@@ -1441,7 +1522,7 @@ Procedure GetStubDefinition	(tcClass)
 		+'	loCall.lHasBeenCalled = .T.' + Chr(13)+Chr(10) ;
 		+'	Do case' + Chr(13)+Chr(10) ;
 		+'	Case m.loCall.cAction == "return"' + Chr(13)+Chr(10) ;
-		+'		Return loCall.uReturnValue' + Chr(13)+Chr(10) ;
+		+'		Return loCall.GetReturnValue()' + Chr(13)+Chr(10) ;
 		+'	Case m.loCall.cAction == "fail"' + Chr(13)+Chr(10) ;
 		+'		Local lcValues, lnParm' + Chr(13)+Chr(10) ;
 		+'		lcValues = ""' + Chr(13)+Chr(10) ;
@@ -1484,7 +1565,18 @@ Procedure SetReturnValue (tuValue)
 
 	Local loCall
 	loCall = This.Calls[This.nCurrentCall]
-	loCall.uReturnValue = m.tuValue
+	loCall.SetReturnValue (m.tuValue)
+	
+EndProc
+
+*========================================================================================
+* Enables the return value queue on the current call object
+*========================================================================================
+Procedure EnableReturnValueQueue 
+
+	Local loCall
+	loCall = This.Calls[This.nCurrentCall]
+	loCall.EnableReturnValueQueue ()
 	
 EndProc
 
