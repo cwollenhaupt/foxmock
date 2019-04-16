@@ -8,6 +8,7 @@ foxmock is best used together with unit test tools like foxUnit. With foxmock yo
 ```
 Adjust the path to foxMock as necessary. In your TearDown method put
 ```
+	mock.CleanUp()
 	Release mock
 ```
 Within your test you can then create objects with properties and method like this:
