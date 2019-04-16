@@ -58,6 +58,12 @@ Define Class foxMock as Collection
 	*--------------------------------------------------------------------------------------
 	cFoundation = ""
 	oFoundation = NULL
+
+	*--------------------------------------------------------------------------------------
+	* A list of all temporary program files that have been created for mocking members.
+	* Each name is separated by a line break.
+	*--------------------------------------------------------------------------------------
+	cTempFiles = ""
 	
 *========================================================================================
 * Internally we instantiate subclasses that need to refer back to the master obejct and
@@ -117,7 +123,8 @@ Procedure This_Access (tcMember)
 	*--------------------------------------------------------------------------------------
 	* Which mode do we operate in now?
 	*
-	* - object has been created with CreateObject: This is the base module. Definition mode main
+	* - object has been created with CreateObject: This is the base module. Definition mode
+	*   main
 	* - object has been created by new: Definition mode 
 	* - is being called within the same line as corresponding New: definition mode
 	* - is being called with mock.Extend(obj). -> definition mode on obj
@@ -180,6 +187,8 @@ Procedure PrepareForCommand (tcMember)
 	Case m.tcMember == "verifyallexpectations"
 		loImplementation = This
 	Case m.tcMember == "add"
+		loImplementation = This
+	Case m.tcMember == "cleanup"
 		loImplementation = This
 	Case m.tcMember == "new"
 		loImplementation = CreateObject ("foxMock_New", Null, This.GetRepository ())
@@ -274,6 +283,11 @@ Procedure PrepareForTest (tcMember)
 	Else 
 		loImplementation = This.Members[m.lnIndex].GetImplementation()
 	EndIf
+	
+	*--------------------------------------------------------------------------------------
+	* Register the temporary file that we created.
+	*--------------------------------------------------------------------------------------
+	This.RegisterTempName (loImplementation.Class)
 
 Return m.loImplementation
 
@@ -455,6 +469,81 @@ Procedure VerifyAllExpectations
 	EndFor 
 	
 EndProc 
+
+*========================================================================================
+* Adds a temporary file name
+*========================================================================================
+Procedure RegisterTempName (tcName)
+
+	Local loRepository
+	loRepository = This.GetRepository()
+	loRepository.cTempFiles = loRepository.cTempFiles + m.tcName + Chr(13) + Chr(10)
+
+EndProc
+
+*========================================================================================
+* Delete all temporarily created files
+*========================================================================================
+Procedure CleanUp
+
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+
+	*--------------------------------------------------------------------------------------
+	* Remove objects from repository
+	*--------------------------------------------------------------------------------------
+	Local loRepository, lnItem
+	loRepository = This.GetRepository()	
+	For lnItem = loRepository.Count to 1 step -1
+		loRepository.Remove (m.lnItem)
+	EndFor
+	
+	*--------------------------------------------------------------------------------------
+	* Remove class and temporary files. We can remove all but the last test object
+	*--------------------------------------------------------------------------------------
+	Local laFiles[1], lnFile, lcName
+	For lnFile = 1 to ALines (laFiles, This.cTempFiles, 4)
+		lcName = laFiles[m.lnFile]
+		Clear Class (m.lcName)
+		Try 
+			Erase (Addbs (GetEnv ("TEMP"))+m.lcName+".fxp")
+		Catch
+		EndTry
+		Erase (Addbs (GetEnv ("TEMP"))+m.lcName+".prg")
+		Erase (Addbs (GetEnv ("TEMP"))+m.lcName+".err")
+	EndFor
+
+EndProc
+
+*========================================================================================
+* Destroy clean up all files automatically
+*========================================================================================
+Procedure Destroy
+
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+	
+	*--------------------------------------------------------------------------------------
+	* Remove reference to foundation class.
+	*--------------------------------------------------------------------------------------
+	Local loMaster
+	loMaster = This.GetMaster ()
+	loMaster.oFoundation = null
+
+	*--------------------------------------------------------------------------------------
+	* Clean up temporary files when the original mock object is released.
+	*--------------------------------------------------------------------------------------
+	If This.oRepository = This
+		This.CleanUp ()
+	EndIf
+
+EndProc
 
 EndDefine 
 
@@ -1320,9 +1409,10 @@ Return m.loImplementation
 *========================================================================================
 Procedure CreateClassDefinition
 
-	Local lcScript, lcFile
-	lcScript = This.GetStubDefinition (Sys(2015))
-	lcFile = Addbs(GetEnv("TEMP")) + Sys(2015) + ".prg"
+	Local lcScript, lcFile, lcTemp
+	lcTemp = Sys(2015)
+	lcScript = This.GetStubDefinition (m.lcTemp)
+	lcFile = Addbs(GetEnv("TEMP")) + m.lcTemp + ".prg"
 	StrToFile (m.lcScript, m.lcFile)
 	Compile (m.lcFile)
 

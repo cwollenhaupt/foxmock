@@ -14,6 +14,7 @@ Procedure Setup
 
 *========================================================================================
 Procedure TearDown
+	mock.CleanUp ()
 	Release mock
 
 *========================================================================================
@@ -210,6 +211,18 @@ Procedure Test_IgnoreMultipleThen
 	This.AssertEquals (1, loRef.Test ())
 	This.AssertEquals (2, loRef.Test ())
 	This.AssertEquals (3, loRef.Test ())
+	
+*========================================================================================
+Procedure Test_CleanUp
+	Local loRef, lnFiles, laFiles[1], lnFilesAfter
+	lnFiles = ADir (laFiles, Addbs (GetEnv ("TEMP"))+"_*.fxp")
+	loRef = mock.new.Method("Test").Returns (".T.")
+	=loRef.Test ()
+	=loRef.Test ()
+	loRef = null
+	mock.CleanUp ()
+	lnFilesAfter = ADir (laFiles, Addbs (GetEnv ("TEMP"))+"_*.fxp")
+	This.AssertEquals (m.lnFiles, m.lnFilesAfter)
 
 EndDefine
 
