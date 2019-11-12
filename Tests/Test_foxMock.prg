@@ -224,7 +224,20 @@ Procedure Test_CleanUp
 	lnFilesAfter = ADir (laFiles, Addbs (GetEnv ("TEMP"))+"_*.fxp")
 	This.AssertEquals (m.lnFiles, m.lnFilesAfter)
 
-EndDefine
+*========================================================================================
+Procedure Test_Bindable
+	Local loRef, loHandler
+	loHandler = mock.new ;
+		.Property ("nValue").Is ("42") ;
+		.expect.CallTo ("OnEvent") ;
+		.Bindable
+	BindEvent (_Screen, "Paint", m.loHandler, "OnEvent")
+	_Screen.Paint ()
+	UnBindEvents (_Screen, "Paint", m.loHandler, "OnEvent")
+	mock.VerifyAllExpectations ()
+	This.AssertEquals (42, m.loHandler.nValue)
+	
+EndDefine 
 
 *========================================================================================
 * This class is used in the Mock_FoundationClass test.

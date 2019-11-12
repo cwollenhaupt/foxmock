@@ -216,6 +216,8 @@ Procedure PrepareForCommand (tcMember)
 		loImplementation = CreateObject ("foxMock_Fail", This.GetMaster ())
 	Case m.tcMember == "scatter"
 		loImplementation = CreateObject ("foxMock_Scatter", This.GetMaster ())
+	Case m.tcMember == "bindable"
+		loImplementation = CreateObject ("foxMock_Bindable", This.GetMaster ())
 	Otherwise 
 		Assert .F. Message "Unknown operation " + m.tcMember
 		loImplementation = NULL
@@ -294,7 +296,7 @@ Return m.loImplementation
 *========================================================================================
 * Returns a class that implements the basic interface for FoxMock as well as the 
 * foundation class. Technially it's a sub class of the foundation class and therefore
-* as the same runtime requirements. Because most classes aren't stateless, we keep a 
+* has the same runtime requirements. Because most classes aren't stateless, we keep a 
 * single copy around.
 *========================================================================================
 Procedure GetFoundationMaster 
@@ -1244,6 +1246,54 @@ Return m.loMaster
 EndDefine 
 
 *========================================================================================
+* foxmock uses the This_Access method to provide members in mocked objects. This works
+* whenever an object is accessed directly, but doesn't for built-in functions that
+* query object meta data (eg. PEMSTATUS()) or bind directly to properties (eg. 
+* BINDEVENTS()).
+*
+* This method creates a new class that has all members that have been defined so far
+* and redirects all member accesses to the mocked object.
+
+* Important: Because this function returns a different object, it stops the fluent 
+*            interface. Bindable must be the final operation in an expression. You cannot
+*            combine AsObject and Bindable in a single declaration.
+*========================================================================================
+Define Class foxMock_Bindable as foxMock
+
+	*--------------------------------------------------------------------------------------
+	* Just so that VFP can actually find the definition. We never us this.
+	*--------------------------------------------------------------------------------------
+	Dimension Bindable[1]
+	
+*========================================================================================
+* Store the master under a unique Id
+*========================================================================================
+Procedure Bindable_Access (tcId)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcId) $ "CN"
+	
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+
+	*--------------------------------------------------------------------------------------
+	* Create a class with all members that are defined in the master
+	*--------------------------------------------------------------------------------------
+	Local loMaster, loDefinition, loWrapper
+	loMaster = This.GetMaster()
+	loDefinition = CreateObject("mockBindableDefinition")
+	loWrapper = loDefinition.GetImplementation (m.loMaster)	
+	
+Return m.loWrapper
+
+EndDefine 
+
+*========================================================================================
 * Manages one possible outcome of a method call.
 *========================================================================================
 Define Class mockMethodCall as Custom
@@ -1397,8 +1447,8 @@ Define Class mockDefinition as Custom
 Procedure GetImplementation (toMaster)
 
 	Local loImplementation, lcScript
-	lcScript = This.CreateClassDefinition()
 	This.oMaster = m.toMaster
+	lcScript = This.CreateClassDefinition()
 	Do (m.lcScript) with m.loImplementation, This
 
 Return m.loImplementation
@@ -1423,11 +1473,12 @@ Return m.lcFile
 *========================================================================================
 Procedure GetStubDefinition	(tcClass)
 Procedure Reset
+Procedure GetProxyDefinition (tcMaster)
 
 EndDefine 
 
 *========================================================================================
-* Implements a FoxMock compatible object based on the 
+* Implements a FoxMock compatible object based on the foundation.
 *========================================================================================
 Define Class mockFoundationDefinition as mockDefinition 
 	
@@ -1529,6 +1580,30 @@ Procedure GetStubDefinition	(tcClass)
 
 Return m.lcScript
 
+*========================================================================================
+* Returns a proxy definition for the property. This call wraps the master object.
+*========================================================================================
+Procedure GetProxyDefinition (tcMaster)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype (m.tcMaster) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* Generate script
+	*--------------------------------------------------------------------------------------
+	Local lcScript
+	lcScript = "" ;
+		+'	'+This.cName+' = .F.' + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+'_Access' + Chr(13)+Chr(10) ;
+		+'Return '+m.tcMaster+"."+This.cName + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+'_Assign (tuValue)' + Chr(13)+Chr(10) ;
+		+'	'+m.tcMaster+'.uValue = m.tuValue' + Chr(13)+Chr(10) ;
+		+'EndProc ' + Chr(13)+Chr(10)
+		
+Return m.lcScript
+
 EndDefine 
 
 *========================================================================================
@@ -1601,11 +1676,11 @@ Procedure GetStubDefinition	(tcClass)
 		+'Procedure Init (toDefinition)' + Chr(13)+Chr(10) ;
 		+'	This.oDefinition = m.toDefinition' + Chr(13)+Chr(10) ;
 		+'EndProc ' + Chr(13)+Chr(10) ;
-		+'Procedure '+This.cName+' ('+m.lcParams+')' + Chr(13)+Chr(10) ;
+		+'Procedure '+This.cName+' ('+This.GetParams ()+')' + Chr(13)+Chr(10) ;
 		+'	Local lnCall, loCall' + Chr(13)+Chr(10) ;
 		+'	For lnCall = This.oDefinition.Calls.Count to 1 Step -1' + Chr(13)+Chr(10) ;
 		+'		loCall = This.oDefinition.Calls[m.lnCall]' + Chr(13)+Chr(10) ;
-		+'		If loCall.Applies('+m.lcParams+')' + Chr(13)+Chr(10) ;
+		+'		If loCall.Applies('+This.GetParams ()+')' + Chr(13)+Chr(10) ;
 		+'			Exit' + Chr(13)+Chr(10) ;
 		+'		EndIf ' + Chr(13)+Chr(10) ;
 		+'	EndFor ' + Chr(13)+Chr(10) ;
@@ -1627,6 +1702,42 @@ Procedure GetStubDefinition	(tcClass)
 		+'	EndCase' + Chr(13)+Chr(10) ;
 		+'EndDefine ' + Chr(13)+Chr(10)
 	
+Return m.lcScript
+
+*========================================================================================
+* Generate the generic parameter list
+*========================================================================================
+Procedure GetParams
+
+	Local lcParams, lnParam
+	lcParams = ""
+	For lnParam = 1 to 23
+		If not Empty(m.lcParams)
+			lcParams = m.lcParams + ","
+		EndIf
+		lcParams = m.lcParams + "t" + Transform(m.lnParam)
+	EndFor 
+	
+Return m.lcParams
+
+*========================================================================================
+* Returns a proxy definition for the property. This call wraps around the master object.
+*========================================================================================
+Procedure GetProxyDefinition (tcMaster)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype (m.tcMaster) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* Generate script
+	*--------------------------------------------------------------------------------------
+	Local lcScript
+	lcScript = "" ;
+		+'Procedure '+This.cName+' ('+This.GetParams ()+')' + Chr(13)+Chr(10) ;
+		+'Return '+m.tcMaster+'.'+This.cName+' ('+This.GetParams ()+')' + Chr(13)+Chr(10)
+		
 Return m.lcScript
 
 *========================================================================================
@@ -1693,3 +1804,49 @@ EndProc
 
 EndDefine 
 
+*========================================================================================
+* Provides an instance of an object that implements the interface which we have defined
+* so far.
+*========================================================================================
+Define Class mockBindableDefinition as mockDefinition
+
+*========================================================================================
+* Returns the class definition for the method stub. 
+*========================================================================================
+Procedure GetStubDefinition	(tcClass)
+
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcClass) == "C"
+		
+	*--------------------------------------------------------------------------------------
+	* Add all members
+	*--------------------------------------------------------------------------------------
+	Local loMember, lcMembers
+	lcMembers = ""
+	For each loMember in This.oMaster.Members FOXOBJECT
+		lcMembers = m.lcMembers + loMember.GetProxyDefinition ("This.__oMaster")
+	EndFor
+	
+	*--------------------------------------------------------------------------------------
+	* The script returns the new instance by reference, because we call it using the
+	* DO command. We cannot use TEXTMERGE here, as the code might be triggered when we
+	* access a mocked object from within a textmerge statement. VFP triggers in this case
+	* an "Textmerge is recursive" error.
+	*--------------------------------------------------------------------------------------
+	Local lcScript
+	lcScript = "" ;
+		+'Lparameters roRef, toDefinition' + Chr(13)+Chr(10) ;
+		+'roRef = CreateObject ("'+m.tcClass+'", m.toDefinition)' + Chr(13)+Chr(10) ;
+		+'Define Class '+m.tcClass+' as Custom' + Chr(13)+Chr(10) ;
+		+'	__oMaster = Null' + Chr(13)+Chr(10) ;
+		+'Procedure Init (toDefinition)' + Chr(13)+Chr(10) ;
+		+'	This.__oMaster = m.toDefinition.oMaster' + Chr(13)+Chr(10) ;
+		+'EndProc ' + Chr(13)+Chr(10) ;
+		+m.lcMembers + Chr(13)+Chr(10) ;
+		+'EndDefine '
+
+Return m.lcScript
+
+EndDefine 
