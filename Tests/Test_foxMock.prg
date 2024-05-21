@@ -237,6 +237,48 @@ Procedure Test_Bindable
 	mock.VerifyAllExpectations ()
 	This.AssertEquals (42, m.loHandler.nValue)
 	
+*========================================================================================
+Procedure Test_Reference
+	Local loRef, loStatus
+	loRef = mock.new ;
+		.Method("Send") ;
+			.Returns(".T.") ;
+			.Reference("2").IsObject( ;
+				mock.new.Property("HttpStatus").Is("200").AsObject ;
+			)
+	loRef.Send ("data", @loStatus)
+	This.AssertEquals (200, m.loStatus.HttpStatus)
+	
+*========================================================================================
+Procedure Test_Reference_Value
+	Local loRef, lnStatus
+	loRef = mock.new ;
+		.Method("Send") ;
+			.ReturnsObject(mock.new.AsObject) ;
+			.Reference("2").Is("404")
+	loRef.Send ("data", @lnStatus)
+	This.AssertEquals (404, m.lnStatus)
+	
+*========================================================================================
+Procedure Test_Reference_Fail
+	Local loRef, loStatus
+	loRef = mock.new ;
+		.Method("Send") ;
+			.When ("'ok', .F.") ;
+				.Returns(".T.") ;
+				.Reference("2").IsObject( ;
+					mock.new.Property("HttpStatus").Is("200").AsObject ;
+				) ;
+			.When ("'fail', .F.") ;
+				.Returns(".T.") ;
+				.Reference("2").IsObject( ;
+					mock.new.Property("HttpStatus").Is("500").AsObject ;
+				)
+	loRef.Send ("ok", @loStatus)
+	This.AssertEquals (200, m.loStatus.HttpStatus)
+	loRef.Send ("fail", @loStatus)
+	This.AssertEquals (500, m.loStatus.HttpStatus)
+	
 EndDefine 
 
 *========================================================================================

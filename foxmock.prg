@@ -218,6 +218,8 @@ Procedure PrepareForCommand (tcMember)
 		loImplementation = CreateObject ("foxMock_Scatter", This.GetMaster ())
 	Case m.tcMember == "bindable"
 		loImplementation = CreateObject ("foxMock_Bindable", This.GetMaster ())
+	Case m.tcMember == "reference"
+		loImplementation = CreateObject ("foxMock_reference", This.GetMaster ())
 	Otherwise 
 		Assert .F. Message "Unknown operation " + m.tcMember
 		loImplementation = NULL
@@ -787,14 +789,22 @@ Procedure Is_Access (tcValue)
 	*--------------------------------------------------------------------------------------
 	* Store the value
 	*--------------------------------------------------------------------------------------
-	Local loMaster, loProperty
+	Local loMaster, loProperty, loMethod
 	loMaster = This.GetMaster()
-	If loMaster.PropertyIsActive()
+	Do case
+	Case loMaster.PropertyIsActive()
 		loProperty = loMaster.GetActiveMember()
 		loProperty.uValue = Evaluate(m.tcValue)
-	Else
-		Assert .F. Message "operation 'Is' only valid for properties"
-	EndIf
+	Case loMaster.MethodIsActive()
+		loMethod = loMaster.GetActiveMember()
+		If loMethod.IsReferenceActive()
+			loMethod.SetReferenceValue (Evaluate(m.tcValue))
+		Else
+			Assert .F. Message "operation 'Is' only valid for properties and references"
+		EndIf
+	Otherwise
+		Assert .F. Message "operation 'Is' only valid for properties and references"
+	EndCase
 		
 Return m.loMaster
 
@@ -830,18 +840,29 @@ Procedure IsObject_Access (tcId)
 	*--------------------------------------------------------------------------------------
 	* Store the value
 	*--------------------------------------------------------------------------------------
-	Local loMaster, loProperty, loObj, loRepository
+	Local loMaster, loProperty, loObj, loRepository, loMethod
 	loMaster = This.GetMaster()
-	If loMaster.PropertyIsActive()
+	Do case
+	Case loMaster.PropertyIsActive()
 		loProperty = loMaster.GetActiveMember()
 		loRepository = This.GetRepository()
 		loObj = loRepository.Item(m.tcId)
 		Assert Vartype(m.loObj) == "O"
 		loProperty.uValue = m.loObj
-	Else
-		Assert .F. Message "operation 'IsObject' only valid for properties"
-	EndIf
-		
+	Case loMaster.MethodIsActive()
+		loMethod = loMaster.GetActiveMember()
+		If m.loMethod.IsReferenceActive()
+			loRepository = This.GetRepository()
+			loObj = loRepository.Item(m.tcId)
+			Assert Vartype(m.loObj) == "O"
+			loMethod.SetReferenceValue (m.loObj)
+		Else
+			Assert .F. Message "operation 'IsObject' only valid for properties and references"
+		EndIf
+	Otherwise 
+		Assert .F. Message "operation 'IsObject' only valid for properties and references"
+	EndCase
+			
 Return m.loMaster
 
 EndDefine 
@@ -1294,6 +1315,48 @@ Return m.loWrapper
 EndDefine 
 
 *========================================================================================
+* The Reference operation extends Return and ReturnObject to also change parameters.
+*========================================================================================
+Define Class foxMock_Reference as foxMock
+
+	*--------------------------------------------------------------------------------------
+	* Just so that VFP can actually find the definition. We never us this.
+	*--------------------------------------------------------------------------------------
+	Dimension Reference[1]
+	
+*========================================================================================
+* Activates the specified reference for the next Is or IsObject operation
+*========================================================================================
+Procedure Reference_Access (tcValue)
+	
+	*--------------------------------------------------------------------------------------
+	* Assertions
+	*--------------------------------------------------------------------------------------
+	Assert Vartype(m.tcValue) == "C"
+	
+	*--------------------------------------------------------------------------------------
+	* The following code operates on the object directly
+	*--------------------------------------------------------------------------------------
+	Private foxMock__Accessor
+	foxMock__Accessor = .T.
+
+	*--------------------------------------------------------------------------------------
+	* Activate reference
+	*--------------------------------------------------------------------------------------
+	Local loMaster, loMethod, loCall
+	loMaster = This.GetMaster()
+	If loMaster.MethodIsActive()
+		loMethod = loMaster.GetActiveMember()
+		loMethod.SetActiveReference (Alltrim(m.tcValue))
+	Else
+		Assert .F. Message "operation 'reference' only valid for methods"
+	EndIf
+
+Return m.loMaster
+
+EndDefine 
+
+*========================================================================================
 * Manages one possible outcome of a method call.
 *========================================================================================
 Define Class mockMethodCall as Custom
@@ -1305,6 +1368,8 @@ Define Class mockMethodCall as Custom
 	Dimension aCondition[23]
 	lExpectation = .F.
 	oQueue = null
+	cActiveReference = ""
+	oReferenceValues = null
 	
 *========================================================================================
 * Upon creating a method call, we can pass a condition. Only when the actual call 
@@ -1412,6 +1477,27 @@ Procedure SetReturnValue (tuValue)
 	Else
 		This.uReturnValue = m.tuValue
 	EndIf	
+
+*========================================================================================
+* Sets the active reference
+*========================================================================================
+Procedure SetActiveReference (tcReference)
+
+	This.cActiveReference = m.tcReference
+
+EndProc
+
+*========================================================================================
+* Sets the value for the active reference
+*========================================================================================
+Procedure SetReferenceValue (tuValue)
+	
+	If not Empty(This.cActiveReference)
+		If Vartype(This.oReferenceValues) != "O"
+			This.oReferenceValues = CreateObject("Collection")
+		EndIf
+		This.oReferenceValues.Add (m.tuValue, This.cActiveReference)
+	EndIf 
 
 EndProc
 
@@ -1664,6 +1750,21 @@ Procedure GetStubDefinition	(tcClass)
 	EndFor 
 	
 	*--------------------------------------------------------------------------------------
+	* Generate the code to set reference parameters. We insert this code in a loop where
+	* loCall refers to the current variation.
+	*--------------------------------------------------------------------------------------
+	Local lcReference, lnReference
+	lcReference = "" ;
+		+"Local lnReference, luValue, lcKey" + Chr(13)+Chr(10) ;
+		+"If Vartype(m.loCall.oReferenceValues)=='O'" + Chr(13)+Chr(10) ;
+		+"  For lnReference=1 to m.loCall.oReferenceValues.Count" + Chr(13)+Chr(10) ;
+		+"    luValue = m.loCall.oReferenceValues.Item(m.lnReference)" + Chr(13)+Chr(10) ;
+		+"    lcKey =  m.loCall.oReferenceValues.GetKey(m.lnReference)" + Chr(13)+Chr(10) ;
+		+"    Store m.luValue to ('t'+m.lcKey)" + Chr(13)+Chr(10) ;
+		+"  Endfor" + Chr(13)+Chr(10) ;
+		+"Endif" + Chr(13)+Chr(10)
+	
+	*--------------------------------------------------------------------------------------
 	* The script returns the new instance by reference, because we call it using the
 	* DO command.
 	*--------------------------------------------------------------------------------------
@@ -1687,6 +1788,13 @@ Procedure GetStubDefinition	(tcClass)
 		+'	loCall.lHasBeenCalled = .T.' + Chr(13)+Chr(10) ;
 		+'	Do case' + Chr(13)+Chr(10) ;
 		+'	Case m.loCall.cAction == "return"' + Chr(13)+Chr(10) ;
+		+'	  Local lnCall, loCall' + Chr(13)+Chr(10) ;
+		+'	  For lnCall = This.oDefinition.Calls.Count to 1 Step -1' + Chr(13)+Chr(10) ;
+		+'		  loCall = This.oDefinition.Calls[m.lnCall]' + Chr(13)+Chr(10) ;
+		+'		  If loCall.Applies('+This.GetParams ()+')' + Chr(13)+Chr(10) ;
+		+          m.lcReference ;
+		+'		  EndIf ' + Chr(13)+Chr(10) ;
+		+'	  EndFor ' + Chr(13)+Chr(10) ;
 		+'		Return loCall.GetReturnValue()' + Chr(13)+Chr(10) ;
 		+'	Case m.loCall.cAction == "fail"' + Chr(13)+Chr(10) ;
 		+'		Local lcValues, lnParm' + Chr(13)+Chr(10) ;
@@ -1779,6 +1887,38 @@ Procedure EnableReturnValueQueue
 	loCall = This.Calls[This.nCurrentCall]
 	loCall.EnableReturnValueQueue ()
 	
+EndProc
+
+*========================================================================================
+* Activates the reference for the current call object
+*========================================================================================
+Procedure SetActiveReference (tcReference)
+
+	Local loCall
+	loCall = This.Calls[This.nCurrentCall]
+	loCall.SetActiveReference (m.tcReference)
+
+EndProc
+
+*========================================================================================
+* Returns .T. if a reference is active for the current call object
+*========================================================================================
+Procedure IsReferenceActive
+
+	Local loCall
+	loCall = This.Calls[This.nCurrentCall]
+	
+Return not Empty (m.loCall.cActiveReference)
+
+*========================================================================================
+* Sets the reference value for the current call object
+*========================================================================================
+Procedure SetReferenceValue (tuValue)
+
+	Local loCall
+	loCall = This.Calls[This.nCurrentCall]
+	loCall.SetReferenceValue (m.tuValue)
+
 EndProc
 
 *========================================================================================
