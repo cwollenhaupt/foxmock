@@ -1793,6 +1793,7 @@ Procedure GetStubDefinition	(tcClass)
 		+'		  loCall = This.oDefinition.Calls[m.lnCall]' + Chr(13)+Chr(10) ;
 		+'		  If loCall.Applies('+This.GetParams ()+')' + Chr(13)+Chr(10) ;
 		+          m.lcReference ;
+		+'         Exit' + Chr(13)+Chr(10) ;
 		+'		  EndIf ' + Chr(13)+Chr(10) ;
 		+'	  EndFor ' + Chr(13)+Chr(10) ;
 		+'		Return loCall.GetReturnValue()' + Chr(13)+Chr(10) ;
